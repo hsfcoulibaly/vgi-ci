@@ -25,7 +25,7 @@ export async function GET() {
     prisma.paiement.findMany({
       where: { moisConcerne: moisActuel },
       include: { locataire: { select: { nom: true } } },
-    }).then((rows) => rows as Array<{ montant: number; statut: string }>),
+    }),
     prisma.paiement.findMany({
       take: 5,
       orderBy: { datePaiement: "desc" },
@@ -37,7 +37,7 @@ export async function GET() {
     }),
   ]);
 
-  const totalEncaisse = paiementsMois.reduce((s, p) => s + p.montant, 0);
+  const totalEncaisse = paiementsMois.reduce((s: number, p) => s + p.montant, 0);
   const totalAttendu = await prisma.locataire.aggregate({
     where: { statut: "ACTIF" },
     _sum: { loyer: true },
