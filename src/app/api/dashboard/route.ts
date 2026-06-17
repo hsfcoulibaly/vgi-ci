@@ -37,7 +37,7 @@ export async function GET() {
     }),
   ]);
 
-  const totalEncaisse = paiementsMois.reduce((s: number, p) => s + p.montant, 0);
+  const totalEncaisse = paiementsMois.reduce((s: number, p: { montant: number }) => s + p.montant, 0);
   const totalAttendu = await prisma.locataire.aggregate({
     where: { statut: "ACTIF" },
     _sum: { loyer: true },
