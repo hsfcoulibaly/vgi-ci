@@ -1,0 +1,166 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      String   @default("ASSISTANT")
+  actif     Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  paiements  Paiement[]
+  depenses   Depense[]
+  historique Historique[]
+}
+
+model Immeuble {
+  id           String   @id @default(cuid())
+  nom          String
+  adresse      String
+  quartier     String
+  commune      String
+  proprietaire String
+  description  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  logements  Logement[]
+  depenses   Depense[]
+  documents  Document[]
+}
+
+model Logement {
+  id           String   @id @default(cuid())
+  numero       String
+  type         String
+  etage        String?
+  loyer        Float
+  caution      Float    @default(0)
+  statut       String   @default("LIBRE")
+  observations String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  immeuble   Immeuble  @relation(fields: [immeubleId], references: [id])
+  immeubleId String
+
+  locataires Locataire[]
+  paiements  Paiement[]
+  documents  Document[]
+}
+
+model Locataire {
+  id             String    @id @default(cuid())
+  nom            String
+  telephone      String
+  email          String?
+  whatsapp       String?
+  pieceIdentite  String?
+  dateEntree     DateTime
+  dateSortie     DateTime?
+  loyer          Float
+  caution        Float     @default(0)
+  contactUrgence String?
+  statut         String    @default("ACTIF")
+  observations   String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  logement   Logement @relation(fields: [logementId], references: [id])
+  logementId String
+
+  paiements Paiement[]
+  documents Document[]
+}
+
+model Paiement {
+  id            String   @id @default(cuid())
+  moisConcerne  String
+  montant       Float
+  montantDu     Float
+  datePaiement  DateTime @default(now())
+  modePaiement  String
+  reference     String?
+  commentaire   String?
+  statut        String   @default("COMPLET")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  locataire   Locataire @relation(fields: [locataireId], references: [id])
+  locataireId String
+
+  logement   Logement @relation(fields: [logementId], references: [id])
+  logementId String
+
+  agent   User   @relation(fields: [agentId], references: [id])
+  agentId String
+
+  documents  Document[]
+  historique Historique[]
+}
+
+model Depense {
+  id          String   @id @default(cuid())
+  type        String
+  montant     Float
+  date        DateTime
+  fournisseur String?
+  commentaire String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  immeuble   Immeuble @relation(fields: [immeubleId], references: [id])
+  immeubleId String
+
+  agent   User   @relation(fields: [agentId], references: [id])
+  agentId String
+
+  documents Document[]
+}
+
+model Document {
+  id          String   @id @default(cuid())
+  nom         String
+  type        String
+  url         String
+  createdAt   DateTime @default(now())
+
+  immeubleId  String?
+  immeuble    Immeuble?  @relation(fields: [immeubleId], references: [id])
+
+  logementId  String?
+  logement    Logement?  @relation(fields: [logementId], references: [id])
+
+  locataireId String?
+  locataire   Locataire? @relation(fields: [locataireId], references: [id])
+
+  paiementId  String?
+  paiement    Paiement?  @relation(fields: [paiementId], references: [id])
+
+  depenseId   String?
+  depense     Depense?   @relation(fields: [depenseId], references: [id])
+}
+
+model Historique {
+  id         String   @id @default(cuid())
+  action     String
+  details    String?
+  entite     String
+  entiteId   String
+  createdAt  DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id])
+  userId String
+
+  paiement   Paiement? @relation(fields: [paiementId], references: [id])
+  paiementId String?
+}
