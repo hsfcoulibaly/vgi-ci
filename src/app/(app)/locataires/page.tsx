@@ -1,24 +1,22 @@
-﻿"use client";
+"use client";
 import { useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
-import { Plus, Users, Phone, Search } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Plus, Users, Phone, Search, Pencil, Trash2 } from "lucide-react";
 import { formatMontant, formatDate, STATUTS_LOCATAIRE } from "@/lib/format";
 
-interface Logement { id: string; numero: string; immeuble: { nom: string } }
+interface Logement { id: string; numero: string; statut: string; loyer?: number; immeuble: { nom: string } }
 interface Locataire {
   id: string; nom: string; telephone: string; email?: string; whatsapp?: string;
+  pieceIdentite?: string; contactUrgence?: string;
   dateEntree: string; loyer: number; caution: number; statut: string;
-  logement: { numero: string; immeuble: { nom: string } };
+  logement: { id: string; numero: string; immeuble: { nom: string } };
   paiements: { montant: number; datePaiement: string }[];
 }
 
@@ -28,18 +26,26 @@ const statutColors: Record<string, string> = {
   LITIGE: "bg-red-100 text-red-800",
 };
 
+const emptyForm = {
+  nom: "", telephone: "", email: "", whatsapp: "", pieceIdentite: "",
+  dateEntree: new Date().toISOString().split("T")[0],
+  loyer: "", caution: "", contactUrgence: "", logementId: "", statut: "ACTIF",
+};
+
 export default function LocatairesPage() {
+  const { data: session } = useSession();
+  const isAdmin = (session?.user as { role?: string })?.role === "ADMIN";
+
   const [locataires, setLocataires] = useState<Locataire[]>([]);
   const [logements, setLogements] = useState<Logement[]>([]);
   const [open, setOpen] = useState(false);
   const [erreur, setErreur] = useState("");
   const [search, setSearch] = useState("");
   const [filtreStatut, setFiltreStatut] = useState("ACTIF");
-  const [form, setForm] = useState({
-    nom: "", telephone: "", email: "", whatsapp: "", pieceIdentite: "",
-    dateEntree: new Date().toISOString().split("T")[0],
-    loyer: "", caution: "", contactUrgence: "", logementId: "",
-  });
+  const [editItem, setEditItem] = useState<Locataire | null>(null);
+  const [deleteItem, setDeleteItem] = useState<Locataire | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [form, setForm] = useState(emptyForm);
 
   const load = async () => {
     await Promise.all([
@@ -50,29 +56,57 @@ export default function LocatairesPage() {
 
   useEffect(() => { load(); }, [filtreStatut, search]);
 
+  function openCreate() {
+    setEditItem(null);
+    setForm(emptyForm);
+    setErreur("");
+    setOpen(true);
+  }
+
+  function openEdit(loc: Locataire) {
+    setEditItem(loc);
+    setForm({
+      nom: loc.nom, telephone: loc.telephone, email: loc.email ?? "", whatsapp: loc.whatsapp ?? "",
+      pieceIdentite: loc.pieceIdentite ?? "", contactUrgence: loc.contactUrgence ?? "",
+      dateEntree: loc.dateEntree.split("T")[0], loyer: String(loc.loyer), caution: String(loc.caution),
+      logementId: loc.logement.id, statut: loc.statut,
+    });
+    setErreur("");
+    setOpen(true);
+  }
+
+  function openDelete(loc: Locataire) {
+    setDeleteItem(loc);
+    setDeleteOpen(true);
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErreur("");
     try {
-      const res = await fetch("/api/locataires", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, loyer: Number(form.loyer), caution: Number(form.caution) }),
-      });
+      const url = editItem ? `/api/locataires/${editItem.id}` : "/api/locataires";
+      const method = editItem ? "PATCH" : "POST";
+      const body = editItem
+        ? { nom: form.nom, telephone: form.telephone, email: form.email, whatsapp: form.whatsapp, pieceIdentite: form.pieceIdentite, contactUrgence: form.contactUrgence, loyer: Number(form.loyer), caution: Number(form.caution), statut: form.statut, dateEntree: form.dateEntree }
+        : { ...form, loyer: Number(form.loyer), caution: Number(form.caution) };
+      const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const data = await res.json();
-      if (res.ok) {
-        setOpen(false);
-        setForm({ nom: "", telephone: "", email: "", whatsapp: "", pieceIdentite: "", dateEntree: new Date().toISOString().split("T")[0], loyer: "", caution: "", contactUrgence: "", logementId: "" });
-        await load();
-      } else {
-        setErreur(data?.error ?? `Erreur ${res.status}`);
-      }
+      if (res.ok) { setOpen(false); await load(); }
+      else setErreur(data?.error ?? `Erreur ${res.status}`);
     } catch (err) {
       setErreur("Erreur réseau : " + String(err));
     }
   }
 
-  const logementsLibres = logements.filter((l) => (l as Logement & { statut: string }).statut === "LIBRE");
+  async function handleDelete() {
+    if (!deleteItem) return;
+    const res = await fetch(`/api/locataires/${deleteItem.id}`, { method: "DELETE" });
+    const data = await res.json();
+    if (res.ok) { setDeleteOpen(false); await load(); }
+    else alert(data?.error ?? "Erreur lors de la suppression");
+  }
+
+  const logementsLibres = logements.filter((l) => l.statut === "LIBRE");
 
   return (
     <div className="space-y-6">
@@ -81,21 +115,22 @@ export default function LocatairesPage() {
           <h1 className="text-2xl font-bold text-gray-900">Locataires</h1>
           <p className="text-gray-500 text-sm">{locataires.length} résultat(s)</p>
         </div>
-        <Button onClick={() => setOpen(true)} className="bg-green-700 hover:bg-green-800">
+        <Button onClick={openCreate} className="bg-green-700 hover:bg-green-800">
           <Plus className="w-4 h-4 mr-2" />Ajouter
         </Button>
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-            <DialogHeader><DialogTitle>Nouveau locataire</DialogTitle></DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-3 mt-2">
+          <DialogHeader><DialogTitle>{editItem ? "Modifier le locataire" : "Nouveau locataire"}</DialogTitle></DialogHeader>
+          <form onSubmit={handleSubmit} className="space-y-3 mt-2">
+            {!editItem && (
               <div className="space-y-1">
                 <Label>Logement</Label>
                 <Select value={form.logementId} onValueChange={(v) => {
                   if (!v) return;
                   const log = logements.find((l) => l.id === v);
-                  setForm({ ...form, logementId: v, loyer: log ? String((log as { loyer?: number }).loyer ?? "") : form.loyer });
+                  setForm({ ...form, logementId: v, loyer: log?.loyer ? String(log.loyer) : form.loyer });
                 }}>
                   <SelectTrigger>
                     <span className={form.logementId ? "" : "text-gray-400"}>
@@ -111,45 +146,70 @@ export default function LocatairesPage() {
                   </SelectContent>
                 </Select>
               </div>
-              {[
-                { key: "nom", label: "Nom complet", placeholder: "Jean Kouamé", required: true },
-                { key: "telephone", label: "Téléphone", placeholder: "0701234567", required: true },
-                { key: "whatsapp", label: "WhatsApp", placeholder: "0701234567" },
-                { key: "email", label: "Email", placeholder: "jean@email.com" },
-                { key: "pieceIdentite", label: "Pièce d'identité", placeholder: "CNI / Passeport n°" },
-                { key: "contactUrgence", label: "Contact urgence", placeholder: "Nom et téléphone" },
-              ].map(({ key, label, placeholder, required }) => (
-                <div key={key} className="space-y-1">
-                  <Label>{label}</Label>
-                  <Input
-                    value={form[key as keyof typeof form]}
-                    onChange={(e) => setForm({ ...form, [key]: e.target.value })}
-                    placeholder={placeholder}
-                    required={required}
-                  />
-                </div>
-              ))}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label>Date d&apos;entrée</Label>
-                  <Input type="date" value={form.dateEntree} onChange={(e) => setForm({ ...form, dateEntree: e.target.value })} required />
-                </div>
-                <div className="space-y-1">
-                  <Label>Loyer (FCFA)</Label>
-                  <Input type="number" value={form.loyer} onChange={(e) => setForm({ ...form, loyer: e.target.value })} required />
-                </div>
+            )}
+            {[
+              { key: "nom", label: "Nom complet", placeholder: "Jean Kouamé", required: true },
+              { key: "telephone", label: "Téléphone", placeholder: "0701234567", required: true },
+              { key: "whatsapp", label: "WhatsApp", placeholder: "0701234567" },
+              { key: "email", label: "Email", placeholder: "jean@email.com" },
+              { key: "pieceIdentite", label: "Pièce d'identité", placeholder: "CNI / Passeport n°" },
+              { key: "contactUrgence", label: "Contact urgence", placeholder: "Nom et téléphone" },
+            ].map(({ key, label, placeholder, required }) => (
+              <div key={key} className="space-y-1">
+                <Label>{label}</Label>
+                <Input value={form[key as keyof typeof form]} onChange={(e) => setForm({ ...form, [key]: e.target.value })} placeholder={placeholder} required={required} />
+              </div>
+            ))}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>Date d&apos;entrée</Label>
+                <Input type="date" value={form.dateEntree} onChange={(e) => setForm({ ...form, dateEntree: e.target.value })} required />
               </div>
               <div className="space-y-1">
-                <Label>Caution versée (FCFA)</Label>
-                <Input type="number" value={form.caution} onChange={(e) => setForm({ ...form, caution: e.target.value })} />
+                <Label>Loyer (FCFA)</Label>
+                <Input type="number" value={form.loyer} onChange={(e) => setForm({ ...form, loyer: e.target.value })} required />
               </div>
-              {erreur && <p className="text-sm text-red-600 bg-red-50 rounded p-2">{erreur}</p>}
-              <div className="flex justify-end gap-2 pt-2">
-                <Button type="button" variant="outline" onClick={() => setOpen(false)}>Annuler</Button>
-                <Button type="submit" className="bg-green-700 hover:bg-green-800">Enregistrer</Button>
+            </div>
+            <div className="space-y-1">
+              <Label>Caution versée (FCFA)</Label>
+              <Input type="number" value={form.caution} onChange={(e) => setForm({ ...form, caution: e.target.value })} />
+            </div>
+            {editItem && (
+              <div className="space-y-1">
+                <Label>Statut</Label>
+                <Select value={form.statut} onValueChange={(v) => v && setForm({ ...form, statut: v })}>
+                  <SelectTrigger>
+                    <span>{STATUTS_LOCATAIRE[form.statut] ?? form.statut}</span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(STATUTS_LOCATAIRE).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
-            </form>
-          </DialogContent>
+            )}
+            {erreur && <p className="text-sm text-red-600 bg-red-50 rounded p-2">{erreur}</p>}
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="outline" onClick={() => setOpen(false)}>Annuler</Button>
+              <Button type="submit" className="bg-green-700 hover:bg-green-800">Enregistrer</Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Supprimer ce locataire ?</DialogTitle></DialogHeader>
+          <p className="text-sm text-gray-600 mt-1">
+            Vous allez supprimer <span className="font-semibold">{deleteItem?.nom}</span> et toutes ses données. Action irréversible.
+          </p>
+          {deleteItem?.statut === "ACTIF" && (
+            <p className="text-xs text-orange-600 mt-1">Le logement sera remis en statut Libre automatiquement.</p>
+          )}
+          <div className="flex justify-end gap-2 mt-4">
+            <Button variant="outline" onClick={() => setDeleteOpen(false)}>Annuler</Button>
+            <Button className="bg-red-600 hover:bg-red-700 text-white" onClick={handleDelete}>Supprimer</Button>
+          </div>
+        </DialogContent>
       </Dialog>
 
       <div className="flex gap-3 flex-wrap items-center">
@@ -178,7 +238,19 @@ export default function LocatairesPage() {
                     <p className="text-xs text-gray-400">{loc.logement.immeuble.nom} · {loc.logement.numero}</p>
                   </div>
                 </div>
-                <Badge className={statutColors[loc.statut] ?? ""}>{STATUTS_LOCATAIRE[loc.statut]}</Badge>
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <Badge className={statutColors[loc.statut] ?? ""}>{STATUTS_LOCATAIRE[loc.statut]}</Badge>
+                  {isAdmin && (
+                    <>
+                      <button onClick={() => openEdit(loc)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-green-700 transition-colors">
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button onClick={() => openDelete(loc)} className="p-1.5 rounded hover:bg-red-50 text-gray-400 hover:text-red-600 transition-colors">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
               <div className="flex items-center gap-1 text-sm text-gray-500">
                 <Phone className="w-3 h-3" />{loc.telephone}
@@ -206,8 +278,3 @@ export default function LocatairesPage() {
     </div>
   );
 }
-
-
-
-
-

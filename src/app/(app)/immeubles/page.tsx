@@ -1,70 +1,85 @@
 "use client";
 import { useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Building2, MapPin } from "lucide-react";
+import { Plus, Building2, MapPin, Pencil, Trash2 } from "lucide-react";
 
 interface Logement { id: string; statut: string }
 interface Immeuble {
-  id: string;
-  nom: string;
-  adresse: string;
-  quartier: string;
-  commune: string;
-  proprietaire: string;
-  description?: string;
+  id: string; nom: string; adresse: string; quartier: string;
+  commune: string; proprietaire: string; description?: string;
   logements: Logement[];
 }
 
+const emptyForm = { nom: "", adresse: "", quartier: "", commune: "", proprietaire: "", description: "" };
+
 export default function ImmeublesPage() {
+  const { data: session } = useSession();
+  const isAdmin = (session?.user as { role?: string })?.role === "ADMIN";
+
   const [immeubles, setImmeubles] = useState<Immeuble[]>([]);
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [erreur, setErreur] = useState("");
-  const [form, setForm] = useState({
-    nom: "", adresse: "", quartier: "", commune: "", proprietaire: "", description: "",
-  });
+  const [editItem, setEditItem] = useState<Immeuble | null>(null);
+  const [deleteItem, setDeleteItem] = useState<Immeuble | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [form, setForm] = useState(emptyForm);
 
   const load = () =>
-    fetch("/api/immeubles")
-      .then((r) => r.json())
-      .then((d) => { if (Array.isArray(d)) setImmeubles(d); })
-      .catch(() => {});
+    fetch("/api/immeubles").then((r) => r.json())
+      .then((d) => { if (Array.isArray(d)) setImmeubles(d); }).catch(() => {});
 
   useEffect(() => { load(); }, []);
+
+  function openCreate() {
+    setEditItem(null);
+    setForm(emptyForm);
+    setErreur("");
+    setOpen(true);
+  }
+
+  function openEdit(imm: Immeuble) {
+    setEditItem(imm);
+    setForm({ nom: imm.nom, adresse: imm.adresse, quartier: imm.quartier, commune: imm.commune, proprietaire: imm.proprietaire, description: imm.description ?? "" });
+    setErreur("");
+    setOpen(true);
+  }
+
+  function openDelete(imm: Immeuble) {
+    setDeleteItem(imm);
+    setDeleteOpen(true);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
     setErreur("");
     try {
-      const res = await fetch("/api/immeubles", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
+      const url = editItem ? `/api/immeubles/${editItem.id}` : "/api/immeubles";
+      const method = editItem ? "PATCH" : "POST";
+      const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
       const data = await res.json();
-      if (res.ok) {
-        setOpen(false);
-        setForm({ nom: "", adresse: "", quartier: "", commune: "", proprietaire: "", description: "" });
-        await load();
-      } else {
-        setErreur(data?.error ?? `Erreur ${res.status}`);
-      }
+      if (res.ok) { setOpen(false); await load(); }
+      else setErreur(data?.error ?? `Erreur ${res.status}`);
     } catch (err) {
       setErreur("Erreur réseau : " + String(err));
     }
     setSaving(false);
+  }
+
+  async function handleDelete() {
+    if (!deleteItem) return;
+    const res = await fetch(`/api/immeubles/${deleteItem.id}`, { method: "DELETE" });
+    const data = await res.json();
+    if (res.ok) { setDeleteOpen(false); await load(); }
+    else alert(data?.error ?? "Erreur lors de la suppression");
   }
 
   return (
@@ -74,17 +89,16 @@ export default function ImmeublesPage() {
           <h1 className="text-2xl font-bold text-gray-900">Immeubles</h1>
           <p className="text-gray-500 text-sm">{immeubles.length} immeuble(s) enregistré(s)</p>
         </div>
-
-        {/* Button lives OUTSIDE Dialog to avoid event conflicts */}
-        <Button onClick={() => setOpen(true)} className="bg-green-700 hover:bg-green-800">
+        <Button onClick={openCreate} className="bg-green-700 hover:bg-green-800">
           <Plus className="w-4 h-4 mr-2" /> Ajouter
         </Button>
       </div>
 
+      {/* Create / Edit dialog */}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Ajouter un immeuble</DialogTitle>
+            <DialogTitle>{editItem ? "Modifier l'immeuble" : "Ajouter un immeuble"}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-3 mt-2">
             {[
@@ -96,21 +110,12 @@ export default function ImmeublesPage() {
             ].map(({ key, label, placeholder }) => (
               <div key={key} className="space-y-1">
                 <Label>{label}</Label>
-                <Input
-                  value={form[key as keyof typeof form]}
-                  onChange={(e) => setForm({ ...form, [key]: e.target.value })}
-                  placeholder={placeholder}
-                  required
-                />
+                <Input value={form[key as keyof typeof form]} onChange={(e) => setForm({ ...form, [key]: e.target.value })} placeholder={placeholder} required />
               </div>
             ))}
             <div className="space-y-1">
               <Label>Description</Label>
-              <Textarea
-                value={form.description}
-                onChange={(e) => setForm({ ...form, description: e.target.value })}
-                rows={2}
-              />
+              <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={2} />
             </div>
             {erreur && <p className="text-sm text-red-600 bg-red-50 rounded p-2">{erreur}</p>}
             <div className="flex justify-end gap-2 pt-2">
@@ -123,6 +128,23 @@ export default function ImmeublesPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Delete confirmation dialog */}
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Supprimer cet immeuble ?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-gray-600 mt-1">
+            Vous êtes sur le point de supprimer <span className="font-semibold">{deleteItem?.nom}</span>. Cette action est irréversible.
+          </p>
+          <p className="text-xs text-orange-600 mt-1">La suppression échouera si des logements sont encore liés à cet immeuble.</p>
+          <div className="flex justify-end gap-2 mt-4">
+            <Button variant="outline" onClick={() => setDeleteOpen(false)}>Annuler</Button>
+            <Button className="bg-red-600 hover:bg-red-700 text-white" onClick={handleDelete}>Supprimer</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {immeubles.map((imm) => {
           const occupes = imm.logements.filter((l) => l.statut === "OCCUPE").length;
@@ -130,21 +152,30 @@ export default function ImmeublesPage() {
           return (
             <Card key={imm.id} className="hover:shadow-md transition-shadow">
               <CardHeader className="pb-2">
-                <div className="flex items-center gap-2">
-                  <Building2 className="w-5 h-5 text-green-600 flex-shrink-0" />
-                  <CardTitle className="text-base leading-tight">{imm.nom}</CardTitle>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Building2 className="w-5 h-5 text-green-600 flex-shrink-0" />
+                    <CardTitle className="text-base leading-tight truncate">{imm.nom}</CardTitle>
+                  </div>
+                  {isAdmin && (
+                    <div className="flex gap-1 flex-shrink-0">
+                      <button onClick={() => openEdit(imm)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-green-700 transition-colors">
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button onClick={() => openDelete(imm)} className="p-1.5 rounded hover:bg-red-50 text-gray-400 hover:text-red-600 transition-colors">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
                 </div>
               </CardHeader>
               <CardContent className="space-y-2">
                 <div className="flex items-center gap-1 text-sm text-gray-500">
-                  <MapPin className="w-3 h-3" />
-                  {imm.quartier}, {imm.commune}
+                  <MapPin className="w-3 h-3" />{imm.quartier}, {imm.commune}
                 </div>
                 <p className="text-xs text-gray-400">{imm.adresse}</p>
                 <p className="text-xs text-gray-500">Propriétaire : {imm.proprietaire}</p>
-                {imm.description && (
-                  <p className="text-xs text-gray-400 line-clamp-2">{imm.description}</p>
-                )}
+                {imm.description && <p className="text-xs text-gray-400 line-clamp-2">{imm.description}</p>}
                 <div className="flex gap-2 pt-1">
                   <Badge className="bg-green-100 text-green-800 text-xs">{occupes} occupé{occupes > 1 ? "s" : ""}</Badge>
                   <Badge className="bg-blue-100 text-blue-800 text-xs">{libres} libre{libres > 1 ? "s" : ""}</Badge>
@@ -154,7 +185,6 @@ export default function ImmeublesPage() {
             </Card>
           );
         })}
-
         {immeubles.length === 0 && (
           <div className="col-span-full text-center py-16 text-gray-400">
             <Building2 className="w-12 h-12 mx-auto mb-3 opacity-30" />

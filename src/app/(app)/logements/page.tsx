@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,14 +8,14 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, DoorOpen } from "lucide-react";
+import { Plus, DoorOpen, Pencil, Trash2 } from "lucide-react";
 import { formatMontant, TYPES_LOGEMENT, STATUTS_LOGEMENT } from "@/lib/format";
 
 interface Immeuble { id: string; nom: string }
 interface Logement {
   id: string; numero: string; type: string; etage?: string;
   loyer: number; caution: number; statut: string;
-  immeuble: { nom: string };
+  immeuble: { id: string; nom: string };
   locataires: { nom: string; telephone: string }[];
 }
 
@@ -24,16 +25,22 @@ const statusColors: Record<string, string> = {
   TRAVAUX: "bg-yellow-100 text-yellow-800",
 };
 
+const emptyForm = { numero: "", type: "APPARTEMENT", etage: "", loyer: "", caution: "", statut: "LIBRE", immeubleId: "" };
+
 export default function LogementsPage() {
+  const { data: session } = useSession();
+  const isAdmin = (session?.user as { role?: string })?.role === "ADMIN";
+
   const [logements, setLogements] = useState<Logement[]>([]);
   const [immeubles, setImmeubles] = useState<Immeuble[]>([]);
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [erreur, setErreur] = useState("");
+  const [editItem, setEditItem] = useState<Logement | null>(null);
+  const [deleteItem, setDeleteItem] = useState<Logement | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [filtreStatut, setFiltreStatut] = useState("TOUS");
-  const [form, setForm] = useState({
-    numero: "", type: "APPARTEMENT", etage: "", loyer: "", caution: "", immeubleId: "",
-  });
+  const [form, setForm] = useState(emptyForm);
 
   const load = async () => {
     await Promise.all([
@@ -45,28 +52,48 @@ export default function LogementsPage() {
 
   const filtered = filtreStatut === "TOUS" ? logements : logements.filter((l) => l.statut === filtreStatut);
 
+  function openCreate() {
+    setEditItem(null);
+    setForm(emptyForm);
+    setErreur("");
+    setOpen(true);
+  }
+
+  function openEdit(log: Logement) {
+    setEditItem(log);
+    setForm({ numero: log.numero, type: log.type, etage: log.etage ?? "", loyer: String(log.loyer), caution: String(log.caution), statut: log.statut, immeubleId: log.immeuble.id });
+    setErreur("");
+    setOpen(true);
+  }
+
+  function openDelete(log: Logement) {
+    setDeleteItem(log);
+    setDeleteOpen(true);
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
     setErreur("");
     try {
-      const res = await fetch("/api/logements", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, loyer: Number(form.loyer), caution: Number(form.caution) }),
-      });
+      const url = editItem ? `/api/logements/${editItem.id}` : "/api/logements";
+      const method = editItem ? "PATCH" : "POST";
+      const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...form, loyer: Number(form.loyer), caution: Number(form.caution) }) });
       const data = await res.json();
-      if (res.ok) {
-        setOpen(false);
-        setForm({ numero: "", type: "APPARTEMENT", etage: "", loyer: "", caution: "", immeubleId: "" });
-        await load();
-      } else {
-        setErreur(data?.error ?? `Erreur ${res.status}`);
-      }
+      if (res.ok) { setOpen(false); await load(); }
+      else setErreur(data?.error ?? `Erreur ${res.status}`);
     } catch (err) {
       setErreur("Erreur réseau : " + String(err));
     }
     setSaving(false);
+  }
+
+  async function handleDelete() {
+    if (!deleteItem) return;
+    const res = await fetch(`/api/logements/${deleteItem.id}`, { method: "DELETE" });
+    const data = await res.json();
+    if (res.ok) { setDeleteOpen(false); await load(); }
+    else alert(data?.error ?? "Erreur lors de la suppression");
   }
 
   return (
@@ -76,14 +103,14 @@ export default function LogementsPage() {
           <h1 className="text-2xl font-bold text-gray-900">Logements</h1>
           <p className="text-gray-500 text-sm">{logements.length} logement(s)</p>
         </div>
-        <Button onClick={() => setOpen(true)} className="bg-green-700 hover:bg-green-800">
+        <Button onClick={openCreate} className="bg-green-700 hover:bg-green-800">
           <Plus className="w-4 h-4 mr-2" />Ajouter
         </Button>
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>Ajouter un logement</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editItem ? "Modifier le logement" : "Ajouter un logement"}</DialogTitle></DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-3 mt-2">
             <div className="space-y-1">
               <Label>Immeuble</Label>
@@ -117,6 +144,19 @@ export default function LogementsPage() {
                 </SelectContent>
               </Select>
             </div>
+            {editItem && (
+              <div className="space-y-1">
+                <Label>Statut</Label>
+                <Select value={form.statut} onValueChange={(v) => v && setForm({ ...form, statut: v })}>
+                  <SelectTrigger>
+                    <span>{STATUTS_LOGEMENT[form.statut] ?? form.statut}</span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(STATUTS_LOGEMENT).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label>Loyer mensuel (FCFA)</Label>
@@ -135,6 +175,20 @@ export default function LogementsPage() {
               </Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Supprimer ce logement ?</DialogTitle></DialogHeader>
+          <p className="text-sm text-gray-600 mt-1">
+            Logement <span className="font-semibold">{deleteItem?.numero}</span> — {deleteItem?.immeuble.nom}. Action irréversible.
+          </p>
+          <p className="text-xs text-orange-600 mt-1">La suppression échouera si un locataire actif occupe ce logement.</p>
+          <div className="flex justify-end gap-2 mt-4">
+            <Button variant="outline" onClick={() => setDeleteOpen(false)}>Annuler</Button>
+            <Button className="bg-red-600 hover:bg-red-700 text-white" onClick={handleDelete}>Supprimer</Button>
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -157,7 +211,19 @@ export default function LogementsPage() {
                   <span className="font-semibold">{log.numero}</span>
                   <span className="text-gray-400 text-sm">· {TYPES_LOGEMENT[log.type] ?? log.type}</span>
                 </div>
-                <Badge className={statusColors[log.statut] ?? ""}>{STATUTS_LOGEMENT[log.statut] ?? log.statut}</Badge>
+                <div className="flex items-center gap-1">
+                  <Badge className={statusColors[log.statut] ?? ""}>{STATUTS_LOGEMENT[log.statut] ?? log.statut}</Badge>
+                  {isAdmin && (
+                    <>
+                      <button onClick={() => openEdit(log)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-green-700 transition-colors">
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button onClick={() => openDelete(log)} className="p-1.5 rounded hover:bg-red-50 text-gray-400 hover:text-red-600 transition-colors">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
               <p className="text-sm text-gray-500">{log.immeuble.nom}{log.etage ? ` · ${log.etage}` : ""}</p>
               <div className="flex justify-between text-sm">

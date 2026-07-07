@@ -1,18 +1,15 @@
-﻿"use client";
+"use client";
 import { useEffect, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useSession } from "next-auth/react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, CreditCard, Download } from "lucide-react";
+import { Plus, CreditCard, Download, Pencil, Trash2 } from "lucide-react";
 import { formatMontant, formatDate, labelMoisConcerne, MODES_PAIEMENT, STATUTS_PAIEMENT } from "@/lib/format";
 import { generateRecuPDF, PaiementPDF } from "@/lib/pdf";
 
@@ -22,7 +19,7 @@ interface Locataire {
 }
 interface Paiement {
   id: string; moisConcerne: string; montant: number; montantDu: number;
-  datePaiement: string; modePaiement: string; statut: string; commentaire?: string;
+  datePaiement: string; modePaiement: string; statut: string; commentaire?: string; reference?: string;
   locataire: { nom: string };
   logement: { numero: string; immeuble: { nom: string } };
   agent: { name: string };
@@ -34,20 +31,28 @@ const statutColors: Record<string, string> = {
   AVANCE: "bg-blue-100 text-blue-800",
 };
 
+const emptyForm = {
+  locataireId: "", logementId: "", moisConcerne: "",
+  montant: "", montantDu: "", modePaiement: "CASH",
+  datePaiement: new Date().toISOString().split("T")[0],
+  reference: "", commentaire: "", statut: "COMPLET",
+};
+
 export default function PaiementsPage() {
+  const { data: session } = useSession();
+  const isAdmin = (session?.user as { role?: string })?.role === "ADMIN";
+
   const [paiements, setPaiements] = useState<Paiement[]>([]);
   const [locataires, setLocataires] = useState<Locataire[]>([]);
   const [open, setOpen] = useState(false);
   const [erreur, setErreur] = useState("");
+  const [editItem, setEditItem] = useState<Paiement | null>(null);
+  const [deleteItem, setDeleteItem] = useState<Paiement | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [filtreMois, setFiltreMois] = useState(
     () => `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`
   );
-  const [form, setForm] = useState({
-    locataireId: "", logementId: "", moisConcerne: filtreMois,
-    montant: "", montantDu: "", modePaiement: "CASH",
-    datePaiement: new Date().toISOString().split("T")[0],
-    reference: "", commentaire: "", statut: "COMPLET",
-  });
+  const [form, setForm] = useState({ ...emptyForm, moisConcerne: `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}` });
 
   const load = async () => {
     await Promise.all([
@@ -57,16 +62,40 @@ export default function PaiementsPage() {
   };
   useEffect(() => { load(); }, [filtreMois]);
 
+  function openCreate() {
+    setEditItem(null);
+    setForm({ ...emptyForm, moisConcerne: filtreMois, datePaiement: new Date().toISOString().split("T")[0] });
+    setErreur("");
+    setOpen(true);
+  }
+
+  function openEdit(p: Paiement) {
+    setEditItem(p);
+    setForm({
+      locataireId: "", logementId: "",
+      moisConcerne: p.moisConcerne,
+      montant: String(p.montant),
+      montantDu: String(p.montantDu),
+      modePaiement: p.modePaiement,
+      datePaiement: p.datePaiement.split("T")[0],
+      reference: p.reference ?? "",
+      commentaire: p.commentaire ?? "",
+      statut: p.statut,
+    });
+    setErreur("");
+    setOpen(true);
+  }
+
+  function openDelete(p: Paiement) {
+    setDeleteItem(p);
+    setDeleteOpen(true);
+  }
+
   function onLocataireChange(id: string | null) {
     if (!id) return;
     const loc = locataires.find((l) => l.id === id);
     if (loc) {
-      setForm({
-        ...form, locataireId: id,
-        logementId: loc.logement.id,
-        montantDu: String(loc.loyer),
-        montant: String(loc.loyer),
-      });
+      setForm({ ...form, locataireId: id, logementId: loc.logement.id, montantDu: String(loc.loyer), montant: String(loc.loyer) });
     }
   }
 
@@ -74,22 +103,31 @@ export default function PaiementsPage() {
     e.preventDefault();
     setErreur("");
     try {
-      const res = await fetch("/api/paiements", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, montant: Number(form.montant), montantDu: Number(form.montantDu) }),
-      });
+      const url = editItem ? `/api/paiements/${editItem.id}` : "/api/paiements";
+      const method = editItem ? "PATCH" : "POST";
+      const body = editItem
+        ? { moisConcerne: form.moisConcerne, montant: Number(form.montant), montantDu: Number(form.montantDu), datePaiement: form.datePaiement, modePaiement: form.modePaiement, statut: form.statut, reference: form.reference, commentaire: form.commentaire }
+        : { ...form, montant: Number(form.montant), montantDu: Number(form.montantDu) };
+      const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const p = await res.json();
       if (res.ok) {
         setOpen(false);
         await load();
-        if (p.id) generateRecuPDF(p);
+        if (!editItem && p.id) generateRecuPDF(p);
       } else {
         setErreur(p?.error ?? `Erreur ${res.status}`);
       }
     } catch (err) {
       setErreur("Erreur réseau : " + String(err));
     }
+  }
+
+  async function handleDelete() {
+    if (!deleteItem) return;
+    const res = await fetch(`/api/paiements/${deleteItem.id}`, { method: "DELETE" });
+    const data = await res.json();
+    if (res.ok) { setDeleteOpen(false); await load(); }
+    else alert(data?.error ?? "Erreur lors de la suppression");
   }
 
   return (
@@ -99,15 +137,16 @@ export default function PaiementsPage() {
           <h1 className="text-2xl font-bold text-gray-900">Paiements</h1>
           <p className="text-gray-500 text-sm">{paiements.length} paiement(s) ce mois</p>
         </div>
-        <Button onClick={() => setOpen(true)} className="bg-green-700 hover:bg-green-800">
+        <Button onClick={openCreate} className="bg-green-700 hover:bg-green-800">
           <Plus className="w-4 h-4 mr-2" />Enregistrer
         </Button>
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-            <DialogHeader><DialogTitle>Enregistrer un paiement</DialogTitle></DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-3 mt-2">
+          <DialogHeader><DialogTitle>{editItem ? "Modifier le paiement" : "Enregistrer un paiement"}</DialogTitle></DialogHeader>
+          <form onSubmit={handleSubmit} className="space-y-3 mt-2">
+            {!editItem && (
               <div className="space-y-1">
                 <Label>Locataire</Label>
                 <Select value={form.locataireId} onValueChange={onLocataireChange}>
@@ -125,63 +164,84 @@ export default function PaiementsPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label>Mois concerné</Label>
-                  <Input type="month" value={form.moisConcerne} onChange={(e) => setForm({ ...form, moisConcerne: e.target.value })} required />
-                </div>
-                <div className="space-y-1">
-                  <Label>Date du paiement</Label>
-                  <Input type="date" value={form.datePaiement} onChange={(e) => setForm({ ...form, datePaiement: e.target.value })} required />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label>Montant dû (FCFA)</Label>
-                  <Input type="number" value={form.montantDu} onChange={(e) => setForm({ ...form, montantDu: e.target.value })} required />
-                </div>
-                <div className="space-y-1">
-                  <Label>Montant payé (FCFA)</Label>
-                  <Input type="number" value={form.montant} onChange={(e) => {
-                    const m = Number(e.target.value);
-                    const du = Number(form.montantDu);
-                    setForm({ ...form, montant: e.target.value, statut: m >= du ? "COMPLET" : "PARTIEL" });
-                  }} required />
-                </div>
+            )}
+            {editItem && (
+              <p className="text-sm text-gray-500 bg-gray-50 rounded p-2">
+                Paiement de <span className="font-medium">{editItem.locataire.nom}</span> — {labelMoisConcerne(editItem.moisConcerne)}
+              </p>
+            )}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>Mois concerné</Label>
+                <Input type="month" value={form.moisConcerne} onChange={(e) => setForm({ ...form, moisConcerne: e.target.value })} required />
               </div>
               <div className="space-y-1">
-                <Label>Mode de paiement</Label>
-                <Select value={form.modePaiement} onValueChange={(v) => v && setForm({ ...form, modePaiement: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(MODES_PAIEMENT).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <Label>Date du paiement</Label>
+                <Input type="date" value={form.datePaiement} onChange={(e) => setForm({ ...form, datePaiement: e.target.value })} required />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>Montant dû (FCFA)</Label>
+                <Input type="number" value={form.montantDu} onChange={(e) => setForm({ ...form, montantDu: e.target.value })} required />
               </div>
               <div className="space-y-1">
-                <Label>Statut</Label>
-                <Select value={form.statut} onValueChange={(v) => v && setForm({ ...form, statut: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(STATUTS_PAIEMENT).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <Label>Montant payé (FCFA)</Label>
+                <Input type="number" value={form.montant} onChange={(e) => {
+                  const m = Number(e.target.value);
+                  const du = Number(form.montantDu);
+                  setForm({ ...form, montant: e.target.value, statut: m >= du ? "COMPLET" : "PARTIEL" });
+                }} required />
               </div>
-              <div className="space-y-1">
-                <Label>Référence (optionnel)</Label>
-                <Input value={form.reference} onChange={(e) => setForm({ ...form, reference: e.target.value })} placeholder="N° wave / chèque..." />
-              </div>
-              <div className="space-y-1">
-                <Label>Commentaire</Label>
-                <Textarea value={form.commentaire} onChange={(e) => setForm({ ...form, commentaire: e.target.value })} rows={2} />
-              </div>
-              {erreur && <p className="text-sm text-red-600 bg-red-50 rounded p-2">{erreur}</p>}
-              <div className="flex justify-end gap-2 pt-2">
-                <Button type="button" variant="outline" onClick={() => setOpen(false)}>Annuler</Button>
-                <Button type="submit" className="bg-green-700 hover:bg-green-800">Enregistrer + Reçu PDF</Button>
-              </div>
-            </form>
-          </DialogContent>
+            </div>
+            <div className="space-y-1">
+              <Label>Mode de paiement</Label>
+              <Select value={form.modePaiement} onValueChange={(v) => v && setForm({ ...form, modePaiement: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {Object.entries(MODES_PAIEMENT).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Statut</Label>
+              <Select value={form.statut} onValueChange={(v) => v && setForm({ ...form, statut: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {Object.entries(STATUTS_PAIEMENT).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Référence (optionnel)</Label>
+              <Input value={form.reference} onChange={(e) => setForm({ ...form, reference: e.target.value })} placeholder="N° wave / chèque..." />
+            </div>
+            <div className="space-y-1">
+              <Label>Commentaire</Label>
+              <Textarea value={form.commentaire} onChange={(e) => setForm({ ...form, commentaire: e.target.value })} rows={2} />
+            </div>
+            {erreur && <p className="text-sm text-red-600 bg-red-50 rounded p-2">{erreur}</p>}
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="outline" onClick={() => setOpen(false)}>Annuler</Button>
+              <Button type="submit" className="bg-green-700 hover:bg-green-800">
+                {editItem ? "Enregistrer" : "Enregistrer + Reçu PDF"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Supprimer ce paiement ?</DialogTitle></DialogHeader>
+          <p className="text-sm text-gray-600 mt-1">
+            Paiement de <span className="font-semibold">{deleteItem?.locataire.nom}</span> — {formatMontant(deleteItem?.montant ?? 0)} pour {labelMoisConcerne(deleteItem?.moisConcerne)}. Action irréversible.
+          </p>
+          <div className="flex justify-end gap-2 mt-4">
+            <Button variant="outline" onClick={() => setDeleteOpen(false)}>Annuler</Button>
+            <Button className="bg-red-600 hover:bg-red-700 text-white" onClick={handleDelete}>Supprimer</Button>
+          </div>
+        </DialogContent>
       </Dialog>
 
       <div className="flex items-center gap-3">
@@ -203,17 +263,26 @@ export default function PaiementsPage() {
                   <p className="text-xs text-gray-400 mt-1">{MODES_PAIEMENT[p.modePaiement]} · Par {p.agent.name} · {formatDate(p.datePaiement)}</p>
                   {p.commentaire && <p className="text-xs text-gray-400 mt-1 italic">{p.commentaire}</p>}
                 </div>
-                <div className="text-right flex-shrink-0">
+                <div className="text-right flex-shrink-0 space-y-1">
                   <p className="text-lg font-bold text-green-700">{formatMontant(p.montant)}</p>
                   {p.montant < p.montantDu && (
                     <p className="text-xs text-red-500">Reste : {formatMontant(p.montantDu - p.montant)}</p>
                   )}
-                  <Button
-                    size="sm" variant="ghost" className="mt-1 text-green-700 text-xs"
-                    onClick={() => generateRecuPDF(p as PaiementPDF)}
-                  >
-                    <Download className="w-3 h-3 mr-1" />Reçu PDF
-                  </Button>
+                  <div className="flex gap-1 justify-end">
+                    <Button size="sm" variant="ghost" className="text-green-700 text-xs px-2" onClick={() => generateRecuPDF(p as PaiementPDF)}>
+                      <Download className="w-3 h-3 mr-1" />Reçu
+                    </Button>
+                    {isAdmin && (
+                      <>
+                        <button onClick={() => openEdit(p)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-green-700 transition-colors">
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button onClick={() => openDelete(p)} className="p-1.5 rounded hover:bg-red-50 text-gray-400 hover:text-red-600 transition-colors">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
             </CardContent>
@@ -229,8 +298,3 @@ export default function PaiementsPage() {
     </div>
   );
 }
-
-
-
-
-
