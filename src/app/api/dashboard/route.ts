@@ -15,19 +15,23 @@ export async function GET() {
     logementsOccupes,
     logementsLibres,
     locatairesActifs,
+    totalImmeubles,
     paiementsMois,
+    depensesMois,
     derniersPaiements,
   ] = await Promise.all([
     prisma.logement.count(),
     prisma.logement.count({ where: { statut: "OCCUPE" } }),
     prisma.logement.count({ where: { statut: "LIBRE" } }),
     prisma.locataire.count({ where: { statut: "ACTIF" } }),
+    prisma.immeuble.count(),
     prisma.paiement.findMany({
       where: { moisConcerne: moisActuel },
       include: { locataire: { select: { nom: true } } },
     }),
+    prisma.depense.aggregate({ where: { date: { gte: new Date(`${moisActuel}-01`) } }, _sum: { montant: true } }),
     prisma.paiement.findMany({
-      take: 5,
+      take: 6,
       orderBy: { datePaiement: "desc" },
       include: {
         locataire: { select: { nom: true } },
@@ -48,6 +52,7 @@ export async function GET() {
 
   return NextResponse.json({
     moisActuel,
+    totalImmeubles,
     totalLogements,
     logementsOccupes,
     logementsLibres,
@@ -57,6 +62,7 @@ export async function GET() {
     totalAttendu: totalAttendu._sum.loyer ?? 0,
     totalEncaisse,
     resteAEncaisser: Math.max(0, (totalAttendu._sum.loyer ?? 0) - totalEncaisse),
+    depensesMois: depensesMois._sum.montant ?? 0,
     derniersPaiements,
   });
 }
