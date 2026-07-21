@@ -2,8 +2,16 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { AlertTriangle, Phone } from "lucide-react";
+import { AlertTriangle, Phone, MessageCircle, Bell } from "lucide-react";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
 import { formatMontant, formatDate, STATUTS_RETARD } from "@/lib/format";
+import { whatsappLink } from "@/lib/phone";
+
+const now = new Date();
+const moisActuel = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+const MOIS_FR = ["janvier","février","mars","avril","mai","juin","juillet","août","septembre","octobre","novembre","décembre"];
+const moisLabel = `${MOIS_FR[now.getMonth()]} ${now.getFullYear()}`;
 
 interface Retard {
   locataire: { id: string; nom: string; telephone: string };
@@ -27,9 +35,18 @@ export default function RetardsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Suivi des retards</h1>
-        <p className="text-gray-500 text-sm">{retards.length} locataire(s) en retard · Total dû : {formatMontant(total)}</p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Suivi des retards</h1>
+          <p className="text-gray-500 text-sm">{retards.length} locataire(s) en retard · Total dû : {formatMontant(total)}</p>
+        </div>
+        {retards.length > 0 && (
+          <Link href="/rappels">
+            <Button className="bg-[#25D366] hover:bg-[#1da851] text-white hidden sm:flex">
+              <Bell className="w-4 h-4 mr-2" />Envoyer les rappels
+            </Button>
+          </Link>
+        )}
       </div>
 
       {retards.length === 0 ? (
@@ -52,8 +69,18 @@ export default function RetardsPage() {
                         <Badge className={info.color}>{info.label}</Badge>
                       </div>
                       <p className="text-sm text-gray-500">{r.immeuble} · {r.logement}</p>
-                      <div className="flex items-center gap-1 text-sm text-gray-500 mt-1">
-                        <Phone className="w-3 h-3" />{r.locataire.telephone}
+                      <div className="flex items-center gap-2 mt-1 flex-wrap">
+                        <span className="flex items-center gap-1 text-sm text-gray-500">
+                          <Phone className="w-3 h-3" />{r.locataire.telephone}
+                        </span>
+                        <a
+                          href={whatsappLink(r.locataire.telephone, `Bonjour ${r.locataire.nom}, votre loyer de ${moisLabel} (${r.resteADu.toLocaleString("fr-FR")} FCFA) est dû. Merci de régulariser. VGI CI`)}
+                          target="_blank" rel="noopener noreferrer"
+                        >
+                          <Button size="sm" className="bg-[#25D366] hover:bg-[#1da851] text-white h-6 text-xs px-2">
+                            <MessageCircle className="w-3 h-3 mr-1" />WhatsApp
+                          </Button>
+                        </a>
                       </div>
                       {r.dernierPaiement && (
                         <p className="text-xs text-gray-400 mt-1">

@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Building2, Users, CreditCard, AlertTriangle,
-  DoorOpen, TrendingDown, Plus, ArrowRight,
+  DoorOpen, TrendingDown, Plus, ArrowRight, Bell,
 } from "lucide-react";
 import { formatMontant, formatDate, labelMoisConcerne } from "@/lib/format";
 
@@ -244,6 +244,7 @@ export default function DashboardPage() {
               { href: "/logements", icon: DoorOpen, label: "Nouveau logement", color: "text-purple-700 bg-purple-50 hover:bg-purple-100" },
               { href: "/depenses", icon: TrendingDown, label: "Saisir une dépense", color: "text-orange-700 bg-orange-50 hover:bg-orange-100" },
               { href: "/retards", icon: AlertTriangle, label: "Voir les retards", color: "text-red-700 bg-red-50 hover:bg-red-100" },
+              { href: "/rappels", icon: Bell, label: "Envoyer des rappels", color: "text-emerald-700 bg-emerald-50 hover:bg-emerald-100" },
             ].map(({ href, icon: Icon, label, color }) => (
               <Link key={href} href={href}>
                 <div className={`flex items-center gap-3 p-3 rounded-lg ${color} transition-colors cursor-pointer`}>
