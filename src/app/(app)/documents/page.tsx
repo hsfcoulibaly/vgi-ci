@@ -118,7 +118,7 @@ export default function DocumentsPage() {
               <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                 {entityType === "locataire" ? "Locataire" : "Immeuble"}
               </label>
-              <Select value={selectedId} onValueChange={setSelectedId}>
+              <Select value={selectedId} onValueChange={(v) => v && setSelectedId(v)}>
                 <SelectTrigger>
                   <span className={selectedId ? "" : "text-gray-400"}>
                     {selectedId
