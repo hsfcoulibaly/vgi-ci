@@ -5,7 +5,7 @@ import { signOut, useSession } from "next-auth/react";
 import {
   LayoutDashboard, Building2, DoorOpen, Users, CreditCard,
   AlertTriangle, History, TrendingDown, FileText, LogOut,
-  Menu, X, Settings,
+  Menu, X, Settings, FolderOpen,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -25,6 +25,7 @@ const navItems = [
   { href: "/retards",     label: "Retards",           icon: AlertTriangle },
   { href: "/depenses",    label: "Dépenses",          icon: TrendingDown },
   { href: "/historique",  label: "Historique",        icon: History },
+  { href: "/documents",   label: "Documents",         icon: FolderOpen },
   { href: "/rapports",    label: "Rapports",          icon: FileText },
 ];
 

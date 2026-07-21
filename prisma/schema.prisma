@@ -132,6 +132,7 @@ model Document {
   nom         String
   type        String
   url         String
+  publicId    String?
   createdAt   DateTime @default(now())
 
   immeubleId  String?
