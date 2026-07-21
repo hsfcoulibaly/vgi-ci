@@ -45,7 +45,7 @@ export default function RapportsPage() {
     const ws = utils.json_to_sheet(rows);
     const wb = utils.book_new();
     utils.book_append_sheet(wb, ws, "Locataires");
-    writeFile(wb, "locataires_nehemie.xlsx");
+    writeFile(wb, "locataires_vgi.xlsx");
     setLoading(null);
   }
 

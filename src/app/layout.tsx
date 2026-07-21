@@ -6,8 +6,8 @@ import { Providers } from "@/components/providers";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Néhémie — Gestion Locative",
-  description: "Application de gestion immobilière adaptée à la Côte d'Ivoire",
+  title: "Valoris Gestion Immobilière",
+  description: "Application de gestion immobilière — VGI Côte d'Ivoire",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

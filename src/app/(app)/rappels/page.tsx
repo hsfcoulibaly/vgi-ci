@@ -32,7 +32,7 @@ Nous vous rappelons que votre loyer du mois de {mois} d'un montant de {montant} 
 Merci de régulariser votre situation dans les meilleurs délais.
 
 Cordialement,
-VGI Côte d'Ivoire`;
+Valoris Gestion Immobilière`;
 
 function buildMessage(template: string, r: Retard): string {
   return template

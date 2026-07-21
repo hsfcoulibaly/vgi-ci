@@ -11,6 +11,6 @@ export async function GET() {
     return NextResponse.json({ error: "Cloudinary non configuré" }, { status: 503 });
   }
 
-  const params = signCloudinaryUpload("nehemie");
+  const params = signCloudinaryUpload("vgi");
   return NextResponse.json(params);
 }

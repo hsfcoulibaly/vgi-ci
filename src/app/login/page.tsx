@@ -35,11 +35,9 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-900 to-green-700 p-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-3 shadow-lg">
-            <span className="text-green-700 font-bold text-2xl">N</span>
+          <div className="bg-white rounded-2xl px-6 py-4 inline-block shadow-lg mb-2">
+            <img src="/logo-vgi.png" alt="Valoris Gestion Immobilière" className="h-16 w-auto object-contain" />
           </div>
-          <h1 className="text-white text-2xl font-bold">Néhémie</h1>
-          <p className="text-green-200 text-sm">Gestion Locative</p>
         </div>
 
         <Card className="shadow-xl">
@@ -78,7 +76,7 @@ export default function LoginPage() {
               </Button>
             </form>
             <p className="text-xs text-gray-400 mt-4 text-center">
-              Démo: admin@nehemie.ci / admin123
+              Démo: admin@valoris-gestion.ci / admin123
             </p>
           </CardContent>
         </Card>

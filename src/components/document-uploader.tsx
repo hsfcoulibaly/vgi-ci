@@ -37,7 +37,7 @@ export function DocumentUploader({ locataireId, immeubleId, logementId, onUpload
       // Step 2: upload directly to Cloudinary
       const fd = new FormData();
       fd.append("file", file);
-      fd.append("folder", "nehemie");
+      fd.append("folder", "vgi");
       fd.append("timestamp", String(timestamp));
       fd.append("signature", signature);
       fd.append("api_key", apiKey);

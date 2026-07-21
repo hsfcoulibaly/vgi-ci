@@ -110,7 +110,7 @@ export function generateRecuPDF(p: PaiementPDF) {
   doc.setTextColor(150, 150, 150);
   doc.setFontSize(8);
   doc.setFont("helvetica", "italic");
-  doc.text("Reçu généré électroniquement — Néhémie Gestion Locative", 105, 285, { align: "center" });
+  doc.text("Reçu généré électroniquement — Valoris Gestion Immobilière", 105, 285, { align: "center" });
 
   doc.save(`recu_${p.locataire.nom.replace(/\s+/g, "_")}_${p.moisConcerne}.pdf`);
 }
@@ -133,6 +133,6 @@ export function exportPaiementsExcel(paiements: PaiementPDF[]) {
     const ws = utils.json_to_sheet(rows);
     const wb = utils.book_new();
     utils.book_append_sheet(wb, ws, "Paiements");
-    writeFile(wb, "paiements_nehemie.xlsx");
+    writeFile(wb, "paiements_vgi.xlsx");
   });
 }

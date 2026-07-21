@@ -116,7 +116,7 @@ export default function ParametresPage() {
             </div>
             <div className="space-y-1">
               <Label>Email</Label>
-              <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="agent@nehemie.ci" required />
+              <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="agent@valoris-gestion.ci" required />
             </div>
             <div className="space-y-1">
               <Label>{editUser ? "Nouveau mot de passe (laisser vide = inchangé)" : "Mot de passe"}</Label>

@@ -39,18 +39,13 @@ export function Sidebar() {
 
   const NavContent = () => (
     <>
-      <div className="flex items-center gap-3 px-4 py-5 border-b border-green-800">
-        <div className="w-9 h-9 bg-white rounded-lg flex items-center justify-center flex-shrink-0">
-          <svg width="22" height="22" viewBox="0 0 32 32" fill="none">
-            <rect width="32" height="32" rx="6" fill="#15803d"/>
-            <path d="M8 24V12l8-6 8 6v12" stroke="white" strokeWidth="2" strokeLinejoin="round"/>
-            <rect x="13" y="17" width="6" height="7" rx="1" fill="white"/>
-            <path d="M8 14h16" stroke="white" strokeWidth="1.5" strokeOpacity="0.4"/>
-          </svg>
-        </div>
-        <div>
-          <p className="text-white font-bold text-sm leading-tight">Néhémie</p>
-          <p className="text-green-300 text-xs">Gestion Locative</p>
+      <div className="flex items-center justify-center px-3 py-3 border-b border-green-800">
+        <div className="bg-white rounded-xl px-3 py-2 w-full flex items-center justify-center">
+          <img
+            src="/logo-vgi.png"
+            alt="Valoris Gestion Immobilière"
+            className="h-12 w-auto object-contain"
+          />
         </div>
       </div>
 
