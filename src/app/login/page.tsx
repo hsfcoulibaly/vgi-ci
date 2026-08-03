@@ -54,7 +54,7 @@ export default function LoginPage() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin@nehemie.ci"
+                  placeholder="votre@email.com"
                   required
                 />
               </div>
@@ -76,7 +76,7 @@ export default function LoginPage() {
               </Button>
             </form>
             <p className="text-xs text-gray-400 mt-4 text-center">
-              Démo: admin@valoris-gestion.ci / admin123
+              © {new Date().getFullYear()} Valoris Gestion Immobilière
             </p>
           </CardContent>
         </Card>
